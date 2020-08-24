@@ -1,0 +1,43 @@
+#!/usr/bin/env escript
+% Server
+
+main([Name]) ->
+    {ok, CurrentDirectory} = file:get_cwd(),
+    CertFile = CurrentDirectory ++ "/" ++ Name ++ ".crt",
+    KeyFile = CurrentDirectory ++ "/" ++ Name ++ ".key",
+    CaCertFile = CurrentDirectory ++ "/ca.pem",
+    ssl:start(),
+    Options = [
+        {certfile, CertFile},
+        {cacertfile, CaCertFile}, {keyfile, KeyFile}, {reuseaddr, true}, {active, false},
+        {verify, verify_peer},
+        {verify_fun, {fun(OtpCert, Event, UserState) -> verify(OtpCert, Event, UserState) end, []}}
+    ],
+    {ok, ListenSocket} = ssl:listen(9010, Options),
+    server_loop(ListenSocket).
+
+
+server_loop(ListenSocket) ->
+    case ssl:transport_accept(ListenSocket) of
+        {ok, Client} -> spawn(fun() -> io:format("~p~n", [catch handle(Client)]) end);
+        {error, Reason} -> io:format("server loop error: ~p~n", [Reason])
+    end,
+    server_loop(ListenSocket).
+
+handle(ClientSocket) ->
+    ssl:controlling_process(ClientSocket, self()),
+    io:format("handling new socket~n"),
+    case ssl:ssl_accept(ClientSocket) of
+        ok ->
+            io:format("successfuly accepted, closing now~n"),
+            io:format("received: ~p~n", [ssl:recv(ClientSocket, 0)]),
+            ssl:close(ClientSocket);
+        {error, Reason} ->
+            io:format("handle failed on ssl_accept with: ~p~n", [Reason])
+    end.
+
+
+verify(_, {bad_cert, _} = Reason, _) -> {fail, Reason};
+verify(_, {extension, _}, UserState) -> {unknown, UserState};
+verify(_, valid, UserState) -> {valid, UserState};
+verify(_, valid_peer, UserState) -> {valid, UserState}.

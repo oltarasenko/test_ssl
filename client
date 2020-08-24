@@ -1,0 +1,23 @@
+#!/usr/bin/env escript
+% Client
+
+
+main([Name]) ->
+    main([Name, "localhost"]);
+main([Name, Host]) ->
+    {ok, CurrentDirectory} = file:get_cwd(),
+    CertFile = CurrentDirectory ++ "/" ++ Name ++ ".crt",
+    KeyFile = CurrentDirectory ++ "/" ++ Name ++ ".key",
+    io:format("Key: ~p~n", [KeyFile]),
+    ssl:start(),
+    Options = [{active, false}, {certfile, CertFile}, {keyfile, KeyFile}],
+    case ssl:connect(Host, 9010, Options, infinity) of
+        {ok, ClientSock} ->
+            io:format("successfuly connected~n"),
+            ssl:send(ClientSock, <<"hey!">>),
+            ssl:close(ClientSock),
+            halt(0);
+        {error, Reason} ->
+            io:format("failed to connect with ~p~n", [Reason]),
+            halt(1)
+    end.
